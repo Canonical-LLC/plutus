@@ -41,6 +41,9 @@ import GHC.Generics
 import PlutusCore.Pretty
 import PlutusPrelude (through)
 import Prettyprinter
+import System.IO.Unsafe
+import Data.ByteString.Lazy qualified as BSL
+import Flat (flat)
 
 {- Note [New builtins and protocol versions]
 When we add a new builtin to the language, that is a *backwards-compatible* change.
@@ -215,13 +218,14 @@ mkTermToEvaluate
     -> m (UPLC.Term UPLC.NamedDeBruijn DefaultUni DefaultFun ())
 mkTermToEvaluate lv pv bs args = do
     -- It decodes the program through the optimized ScriptForExecution. See `ScriptForExecution`.
-    (_, ScriptForExecution (UPLC.Program _ v t)) <- liftEither $ first CodecError $ CBOR.deserialiseFromBytes (scriptCBORDecoder lv pv) $ fromStrict $ fromShort bs
+    (_, ScriptForExecution program@(UPLC.Program _ v t)) <- liftEither $ first CodecError $ CBOR.deserialiseFromBytes (scriptCBORDecoder lv pv) $ fromStrict $ fromShort bs
     unless (v == Plutus.defaultVersion ()) $ throwError $ IncompatibleVersionError v
     let termArgs = fmap (UPLC.mkConstant ()) args
         appliedT = UPLC.mkIterApp () t termArgs
 
-    -- make sure that term is closed, i.e. well-scoped
-    through (liftEither . first DeBruijnError . UPLC.checkScope) appliedT
+    case unsafePerformIO $ BSL.writeFile "program.uplc" $ BSL.fromStrict $ flat program of
+      -- make sure that term is closed, i.e. well-scoped
+      () -> through (liftEither . first DeBruijnError . UPLC.checkScope) appliedT
 
 -- | Which unlifting mode should we use in the given 'ProtocolVersion'
 -- so as to correctly construct the machine's parameters
