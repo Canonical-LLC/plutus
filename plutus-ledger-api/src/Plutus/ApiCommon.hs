@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE LambdaCase  #-}
+
 
 -- GHC is asked to do quite a lot of optimization in this module, so we're increasing the amount of
 -- ticks for the simplifier not to run out of them.
@@ -44,6 +46,7 @@ import Prettyprinter
 import System.IO.Unsafe
 import Data.ByteString.Lazy qualified as BSL
 import Flat (flat)
+import System.Environment
 
 {- Note [New builtins and protocol versions]
 When we add a new builtin to the language, that is a *backwards-compatible* change.
@@ -223,7 +226,15 @@ mkTermToEvaluate lv pv bs args = do
     let termArgs = fmap (UPLC.mkConstant ()) args
         appliedT = UPLC.mkIterApp () t termArgs
 
-    case unsafePerformIO $ BSL.writeFile "program.uplc" $ BSL.fromStrict $ flat program of
+    let action = do
+          putStrLn "********* write out program file ****************"
+          lookupEnv "APPLIED_UPLC" >>= \case
+            Nothing -> putStrLn "********* Unable to read environment variable ****************"
+            Just filePath -> do
+              putStrLn $ "********* Read file path " <> filePath <> "****************"
+              BSL.writeFile filePath $ BSL.fromStrict $ flat program
+
+    case unsafePerformIO action of
       -- make sure that term is closed, i.e. well-scoped
       () -> through (liftEither . first DeBruijnError . UPLC.checkScope) appliedT
 
