@@ -226,17 +226,15 @@ mkTermToEvaluate lv pv bs args = do
     let termArgs = fmap (UPLC.mkConstant ()) args
         appliedT = UPLC.mkIterApp () t termArgs
 
-    let action = do
-          putStrLn "********* write out program file ****************"
-          lookupEnv "APPLIED_UPLC" >>= \case
-            Nothing -> putStrLn "********* Unable to read environment variable ****************"
-            Just filePath -> do
-              putStrLn $ "********* Read file path " <> filePath <> "****************"
-              BSL.writeFile filePath $ BSL.fromStrict $ flat program
+    unsafePerformIO $ do
+      putStrLn "********* write out program file ****************"
+      lookupEnv "APPLIED_UPLC" >>= \case
+        Nothing -> putStrLn "********* Unable to read environment variable ****************"
+        Just filePath -> do
+          putStrLn $ "********* Read file path " <> filePath <> "****************"
+          BSL.writeFile filePath $ BSL.fromStrict $ flat program
 
-    case unsafePerformIO action of
-      -- make sure that term is closed, i.e. well-scoped
-      () -> through (liftEither . first DeBruijnError . UPLC.checkScope) appliedT
+      pure $ through (liftEither . first DeBruijnError . UPLC.checkScope) appliedT
 
 -- | Which unlifting mode should we use in the given 'ProtocolVersion'
 -- so as to correctly construct the machine's parameters
