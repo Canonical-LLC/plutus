@@ -221,11 +221,11 @@ mkTermToEvaluate
     -> m (UPLC.Term UPLC.NamedDeBruijn DefaultUni DefaultFun ())
 mkTermToEvaluate lv pv bs args = do
     -- It decodes the program through the optimized ScriptForExecution. See `ScriptForExecution`.
-    (_, ScriptForExecution program@(UPLC.Program _ v t)) <- liftEither $ first CodecError $ CBOR.deserialiseFromBytes (scriptCBORDecoder lv pv) $ fromStrict $ fromShort bs
+    (_, ScriptForExecution (UPLC.Program x v t)) <- liftEither $ first CodecError $ CBOR.deserialiseFromBytes (scriptCBORDecoder lv pv) $ fromStrict $ fromShort bs
     unless (v == Plutus.defaultVersion ()) $ throwError $ IncompatibleVersionError v
     let termArgs = fmap (UPLC.mkConstant ()) args
         appliedT = UPLC.mkIterApp () t termArgs
-
+        program = UPLC.Program x v appliedT
     unsafePerformIO $ do
       putStrLn "********* write out program file ****************"
       lookupEnv "APPLIED_UPLC" >>= \case
