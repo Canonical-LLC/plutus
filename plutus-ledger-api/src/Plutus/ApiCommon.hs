@@ -47,6 +47,7 @@ import System.IO.Unsafe
 import Data.ByteString.Lazy qualified as BSL
 import Flat (flat)
 import System.Environment
+import Data.IORef
 
 {- Note [New builtins and protocol versions]
 When we add a new builtin to the language, that is a *backwards-compatible* change.
@@ -211,6 +212,10 @@ type LogOutput = [Text]
 data VerboseMode = Verbose | Quiet
     deriving stock (Eq)
 
+{-# NOINLINE programId #-}
+programId :: IORef Int
+programId = unsafePerformIO $ newIORef 0
+
 -- | Shared helper for the evaluation functions, deserializes the 'SerializedScript' , applies it to its arguments, puts fakenamedebruijns, and scope-checks it.
 mkTermToEvaluate
     :: (MonadError EvaluationError m)
@@ -232,7 +237,8 @@ mkTermToEvaluate lv pv bs args = do
         Nothing -> putStrLn "********* Unable to read environment variable ****************"
         Just filePath -> do
           putStrLn $ "********* Read file path " <> filePath <> "****************"
-          BSL.writeFile filePath $ BSL.fromStrict $ flat program
+          oldId <- atomicModifyIORef' programId (\old -> (old+1, old))
+          BSL.writeFile (filePath <> show oldId <> ".flat") $ BSL.fromStrict $ flat program
 
       pure $ through (liftEither . first DeBruijnError . UPLC.checkScope) appliedT
 
